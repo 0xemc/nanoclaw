@@ -1,0 +1,19 @@
+skill: matrix
+version: 1.0.0
+description: "Matrix protocol integration via matrix-js-sdk"
+core_version: 0.1.0
+adds:
+  - src/channels/matrix.ts
+  - src/channels/matrix.test.ts
+modifies:
+  - src/channels/index.ts
+structured:
+  npm_dependencies:
+    matrix-js-sdk: "^34.0.0"
+  env_additions:
+    - MATRIX_HOMESERVER_URL
+    - MATRIX_ACCESS_TOKEN
+    - MATRIX_USER_ID
+conflicts: []
+depends: []
+test: "npx vitest run src/channels/matrix.test.ts"
