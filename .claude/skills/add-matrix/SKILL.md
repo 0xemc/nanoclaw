@@ -1,6 +1,6 @@
 ---
 name: add-matrix
-description: Add Matrix as a channel. Connects to any Matrix homeserver via access token. Rooms become JIDs with the `mx:` prefix.
+description: Add Matrix as a channel. Connects to the reference Matrix server (matrix.org) or a custom server via access token. Rooms become JIDs with the `mx:` prefix.
 ---
 
 # Add Matrix Channel
@@ -19,7 +19,11 @@ Use `AskUserQuestion` to collect configuration:
 
 AskUserQuestion: Do you already have a Matrix access token, or do you need to create one?
 
-If they have one, collect the homeserver URL, access token, and user ID now. If not, guide them through Phase 3.
+If they have one, ask which server they're using:
+- Default: **matrix.org** (the reference Matrix server)
+- Or a custom server URL they provide
+
+Collect the server URL (default `https://matrix.org`), access token, and user ID. If they don't have a token yet, guide them through Phase 3.
 
 ## Phase 2: Apply Code Changes
 
@@ -61,36 +65,57 @@ All tests must pass and build must be clean before proceeding.
 
 ## Phase 3: Setup
 
-### Create a Matrix access token (if needed)
+### 3a. Choose server
 
-Tell the user:
+AskUserQuestion: Which Matrix server are you using?
+- **matrix.org** (default — the reference Matrix server)
+- **Custom** — user provides their own server URL
 
-> To connect NanoClaw to Matrix, you need:
->
-> 1. **Homeserver URL** — e.g. `https://matrix.org` or your own homeserver
-> 2. **User ID** — e.g. `@mybot:matrix.org`
-> 3. **Access token** — get one by logging in via Element or running:
->    ```
->    curl -XPOST 'https://matrix.org/_matrix/client/v3/login' \
->      -d '{"type":"m.login.password","user":"@mybot:matrix.org","password":"yourpassword"}'
->    ```
->    Copy the `access_token` from the response.
->
-> For a dedicated bot account, create a new Matrix account on your homeserver.
+Store the chosen URL as `MATRIX_SERVER` for all subsequent API calls (default `https://matrix.org`).
 
-Wait for the user to provide all three values.
+### 3b. Collect credentials
 
-### Configure environment
+If the user already has a token (from Phase 1 pre-flight), skip to 3d.
 
-Add to `.env`:
+AskUserQuestion: Collect the Matrix username (full MXID like `@you:matrix.org`, or just the localpart like `you` if using matrix.org) and password. Do NOT store the password anywhere — use it only for the login API call, then discard it.
+
+If the user doesn't have a Matrix account yet, tell them to register one at https://app.element.io (for matrix.org) or on their own server, then come back.
+
+### 3c. Generate access token automatically
+
+Run the login API call and extract the token in one step:
 
 ```bash
-MATRIX_HOMESERVER_URL=https://matrix.org
-MATRIX_ACCESS_TOKEN=syt_...
-MATRIX_USER_ID=@mybot:matrix.org
+curl -s -XPOST "$MATRIX_SERVER/_matrix/client/v3/login" \
+  -H 'Content-Type: application/json' \
+  -d "{\"type\":\"m.login.password\",\"user\":\"$MATRIX_USER\",\"password\":\"$MATRIX_PASSWORD\"}"
 ```
 
-Channels auto-enable when their credentials are present — no extra configuration needed.
+Parse the response:
+- If it contains `access_token`: extract it with `jq -r '.access_token'` (or parse manually if jq unavailable)
+- If it contains `errcode`: show the error and ask the user to check their credentials. Common errors:
+  - `M_FORBIDDEN` — wrong password
+  - `M_INVALID_USERNAME` — check the username format (try full MXID `@user:matrix.org`)
+
+Extract `user_id` from the response too (the canonical MXID) — use this as `MATRIX_USER_ID`.
+
+### 3d. Write credentials to .env
+
+Upsert these three lines in `.env` (replace if key exists, append if not):
+
+```bash
+upsert_env() {
+  local key=$1 val=$2
+  if grep -q "^${key}=" .env 2>/dev/null; then
+    sed -i.bak "s|^${key}=.*|${key}=${val}|" .env && rm -f .env.bak
+  else
+    echo "${key}=${val}" >> .env
+  fi
+}
+upsert_env MATRIX_HOMESERVER_URL "$MATRIX_SERVER"
+upsert_env MATRIX_ACCESS_TOKEN "$TOKEN"
+upsert_env MATRIX_USER_ID "$USER_ID"
+```
 
 Sync to container environment:
 
@@ -98,7 +123,9 @@ Sync to container environment:
 mkdir -p data/env && cp .env data/env/env
 ```
 
-### Build and restart
+Channels auto-enable when their credentials are present — no extra configuration needed.
+
+### 3e. Build and restart
 
 ```bash
 npm run build
@@ -108,23 +135,34 @@ launchctl kickstart -k gui/$(id -u)/com.nanoclaw  # macOS
 
 ## Phase 4: Registration
 
-### Get Room IDs
+### 4a. Look up room by name automatically
 
-Tell the user:
+Ask the user for the **name** of the room they want to register (e.g. "General", "NanoClaw"). Do NOT ask them to find the room ID manually.
 
-> To find a room's ID for registration:
->
-> 1. In Element (or any Matrix client), open the room
-> 2. Go to **Room Settings** > **Advanced**
-> 3. Copy the **Internal room ID** — it looks like `!abc123:matrix.org`
->
-> The JID format for NanoClaw is `mx:!abc123:matrix.org`
+Fetch all joined rooms using the stored access token:
 
-Wait for the user to provide the room ID and a display name for it.
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "$MATRIX_SERVER/_matrix/client/v3/joined_rooms"
+```
 
-### Register the room
+For each returned room ID, fetch its display name:
 
-For a main room (responds to all messages):
+```bash
+ENCODED=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$ROOM_ID")
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "$MATRIX_SERVER/_matrix/client/v3/rooms/$ENCODED/state/m.room.name"
+```
+
+Match the user's input against room display names (case-insensitive substring). If multiple rooms match, present them and ask the user to pick one. If none match, list all joined rooms and ask them to choose.
+
+The JID is `mx:${roomId}` where `roomId` is the raw Matrix room ID (e.g. `!abc123:matrix.org`).
+
+### 4b. Register the room
+
+AskUserQuestion: Should this be the **main** room (responds to all messages) or a **trigger-only** room (requires @Andy prefix)?
+
+For a main room:
 
 ```typescript
 registerGroup("mx:!roomId:matrix.org", {
@@ -137,17 +175,19 @@ registerGroup("mx:!roomId:matrix.org", {
 });
 ```
 
-For additional rooms (trigger-only):
+For a trigger-only room:
 
 ```typescript
 registerGroup("mx:!roomId:matrix.org", {
   name: "<room-name>",
-  folder: "matrix_<room-name>",
+  folder: "matrix_<slug>",
   trigger: `@${ASSISTANT_NAME}`,
   added_at: new Date().toISOString(),
   requiresTrigger: true,
 });
 ```
+
+After registering, ask: "Do you want to register another room?" If yes, repeat Phase 4a–4b.
 
 ## Phase 5: Verify
 
@@ -179,7 +219,7 @@ Check:
 
 Tokens expire or get revoked. Generate a new one:
 ```bash
-curl -XPOST 'https://<homeserver>/_matrix/client/v3/login' \
+curl -XPOST 'https://<server>/_matrix/client/v3/login' \
   -d '{"type":"m.login.password","user":"<user_id>","password":"<password>"}'
 ```
 Update `MATRIX_ACCESS_TOKEN` in `.env` and `data/env/env`, then restart.

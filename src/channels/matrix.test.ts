@@ -27,7 +27,9 @@ vi.mock('matrix-js-sdk', () => ({
     const handlers = new Map<string, ((...args: any[]) => any)[]>();
     const client = {
       opts,
-      sendTextMessage: vi.fn().mockResolvedValue({ event_id: '$sent:matrix.org' }),
+      sendTextMessage: vi
+        .fn()
+        .mockResolvedValue({ event_id: '$sent:matrix.org' }),
       sendTyping: vi.fn().mockResolvedValue(undefined),
       stopClient: vi.fn(),
       getRooms: vi.fn(() => []),
@@ -44,7 +46,10 @@ vi.mock('matrix-js-sdk', () => ({
       },
       off(event: string, handler: (...args: any[]) => any) {
         const existing = handlers.get(event) || [];
-        handlers.set(event, existing.filter((h) => h !== handler));
+        handlers.set(
+          event,
+          existing.filter((h) => h !== handler),
+        );
         return this;
       },
       emit(event: string, ...args: any[]) {
@@ -62,7 +67,9 @@ import { MatrixChannel, MatrixChannelOpts } from './matrix.js';
 
 // --- Test helpers ---
 
-function createTestOpts(overrides?: Partial<MatrixChannelOpts>): MatrixChannelOpts {
+function createTestOpts(
+  overrides?: Partial<MatrixChannelOpts>,
+): MatrixChannelOpts {
   return {
     onMessage: vi.fn(),
     onChatMetadata: vi.fn(),
@@ -112,7 +119,10 @@ function makeRoom(overrides: {
   name?: string;
   memberIds?: string[];
 }) {
-  const memberIds = overrides.memberIds ?? ['@alice:matrix.org', '@bot:matrix.org'];
+  const memberIds = overrides.memberIds ?? [
+    '@alice:matrix.org',
+    '@bot:matrix.org',
+  ];
   const members = memberIds.map((id) => ({
     userId: id,
     name: id.split(':')[0].replace('@', ''),
@@ -121,7 +131,8 @@ function makeRoom(overrides: {
     roomId: overrides.roomId ?? '!room1:matrix.org',
     name: overrides.name ?? 'Test Room',
     getMembers: () => members,
-    getMember: (userId: string) => members.find((m) => m.userId === userId) ?? null,
+    getMember: (userId: string) =>
+      members.find((m) => m.userId === userId) ?? null,
   };
 }
 
@@ -162,7 +173,9 @@ describe('MatrixChannel', () => {
     it('calls startClient with initialSyncLimit', async () => {
       const channel = createChannel();
       await channel.connect();
-      expect(currentClient().startClient).toHaveBeenCalledWith({ initialSyncLimit: 10 });
+      expect(currentClient().startClient).toHaveBeenCalledWith({
+        initialSyncLimit: 10,
+      });
     });
 
     it('registers Room.timeline handler on connect', async () => {
@@ -190,7 +203,9 @@ describe('MatrixChannel', () => {
       syncMode.value = 'ERROR';
       const channel = createChannel();
       try {
-        await expect(channel.connect()).rejects.toThrow('Matrix initial sync failed');
+        await expect(channel.connect()).rejects.toThrow(
+          'Matrix initial sync failed',
+        );
       } finally {
         syncMode.value = 'PREPARED';
       }
@@ -205,7 +220,9 @@ describe('MatrixChannel', () => {
       const channel = createChannel(opts);
       await channel.connect();
 
-      const event = makeEvent({ content: { msgtype: 'm.text', body: 'Hello world' } });
+      const event = makeEvent({
+        content: { msgtype: 'm.text', body: 'Hello world' },
+      });
       const room = makeRoom({});
       await triggerTimeline(event, room);
 
@@ -275,7 +292,10 @@ describe('MatrixChannel', () => {
         content: {
           msgtype: 'm.text',
           body: '* edited',
-          'm.relates_to': { rel_type: 'm.replace', event_id: '$orig:matrix.org' },
+          'm.relates_to': {
+            rel_type: 'm.replace',
+            event_id: '$orig:matrix.org',
+          },
         },
       });
       const room = makeRoom({});
@@ -293,7 +313,11 @@ describe('MatrixChannel', () => {
         content: {
           msgtype: 'm.text',
           body: '👍',
-          'm.relates_to': { rel_type: 'm.annotation', event_id: '$orig:matrix.org', key: '👍' },
+          'm.relates_to': {
+            rel_type: 'm.annotation',
+            event_id: '$orig:matrix.org',
+            key: '👍',
+          },
         },
       });
       const room = makeRoom({});
@@ -331,7 +355,9 @@ describe('MatrixChannel', () => {
       await channel.connect();
 
       const event = makeEvent({ sender: '@alice:matrix.org' });
-      const room = makeRoom({ memberIds: ['@alice:matrix.org', '@bot:matrix.org'] });
+      const room = makeRoom({
+        memberIds: ['@alice:matrix.org', '@bot:matrix.org'],
+      });
       await triggerTimeline(event, room);
 
       expect(opts.onMessage).toHaveBeenCalledWith(
@@ -346,7 +372,9 @@ describe('MatrixChannel', () => {
       await channel.connect();
 
       const event = makeEvent({ sender: '@ghost:matrix.org' });
-      const room = makeRoom({ memberIds: ['@alice:matrix.org', '@bot:matrix.org'] });
+      const room = makeRoom({
+        memberIds: ['@alice:matrix.org', '@bot:matrix.org'],
+      });
       await triggerTimeline(event, room);
 
       expect(opts.onMessage).toHaveBeenCalledWith(
@@ -403,7 +431,10 @@ describe('MatrixChannel', () => {
   // --- Message type mapping ---
 
   describe('message type mapping', () => {
-    async function sendMsgType(opts: MatrixChannelOpts, content: Record<string, any>) {
+    async function sendMsgType(
+      opts: MatrixChannelOpts,
+      content: Record<string, any>,
+    ) {
       const channel = createChannel(opts);
       await channel.connect();
       const event = makeEvent({ content });
@@ -536,7 +567,9 @@ describe('MatrixChannel', () => {
       const channel = createChannel(opts);
       await channel.connect();
 
-      currentClient().sendTextMessage.mockRejectedValueOnce(new Error('Forbidden'));
+      currentClient().sendTextMessage.mockRejectedValueOnce(
+        new Error('Forbidden'),
+      );
 
       await expect(
         channel.sendMessage('mx:!room1:matrix.org', 'Will fail'),
@@ -665,7 +698,9 @@ describe('MatrixChannel', () => {
       const channel = createChannel();
       await channel.connect();
 
-      currentClient().sendTyping.mockRejectedValueOnce(new Error('Rate limited'));
+      currentClient().sendTyping.mockRejectedValueOnce(
+        new Error('Rate limited'),
+      );
 
       await expect(
         channel.setTyping('mx:!room1:matrix.org', true),
