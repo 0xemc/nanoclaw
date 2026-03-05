@@ -236,9 +236,6 @@ The bot must be invited to and join rooms before it can receive messages. In Ele
 
 ## Removal
 
-1. Delete `src/channels/matrix.ts` and `src/channels/matrix.test.ts`
-2. Remove `import './matrix.js'` from `src/channels/index.ts`
-3. Remove `MATRIX_HOMESERVER_URL`, `MATRIX_ACCESS_TOKEN`, `MATRIX_USER_ID` from `.env`
-4. Remove Matrix registrations: `sqlite3 store/messages.db "DELETE FROM registered_groups WHERE jid LIKE 'mx:%'"`
-5. Uninstall: `npm uninstall matrix-js-sdk`
-6. Rebuild: `npm run build && launchctl kickstart -k gui/$(id -u)/com.nanoclaw`
+```bash
+npx tsx scripts/uninstall-skill.ts matrix
+```
