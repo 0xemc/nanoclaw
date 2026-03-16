@@ -508,6 +508,13 @@ async function main(): Promise<void> {
       );
       return;
     }
+    if (group.remoteControl === false) {
+      logger.warn(
+        { chatJid, sender: msg.sender },
+        'Remote control rejected: disabled for this group',
+      );
+      return;
+    }
 
     const channel = findChannel(channels, chatJid);
     if (!channel) return;
