@@ -33,6 +33,19 @@ ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 # Install agent-browser and claude-code globally
 RUN npm install -g agent-browser @anthropic-ai/claude-code
 
+# Optionally disable /remote-control — set via --build-arg DISABLE_REMOTE_CONTROL=1
+# Two layers:
+#   1. CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC suppresses the feature flag that enables remote control
+#   2. Binary wrapper blocks any direct invocation of `claude /remote-control` via Bash
+ARG DISABLE_REMOTE_CONTROL=0
+RUN if [ "$DISABLE_REMOTE_CONTROL" = "1" ]; then \
+      CLAUDE_BIN=$(which claude) && \
+      mv "$CLAUDE_BIN" "${CLAUDE_BIN}.real" && \
+      printf '#!/bin/sh\nfor arg in "$@"; do\n  case "$arg" in\n    /remote-control|/remote-control-end)\n      echo "Error: /remote-control is disabled." >&2\n      exit 1\n    ;;\n  esac\ndone\nexec "%s.real" "$@"\n' "$CLAUDE_BIN" > "$CLAUDE_BIN" && \
+      chmod +x "$CLAUDE_BIN"; \
+    fi
+ENV CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=${DISABLE_REMOTE_CONTROL}
+
 # Create app directory
 WORKDIR /app
 

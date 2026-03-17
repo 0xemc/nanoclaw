@@ -106,7 +106,22 @@ sqlite3 store/messages.db "
 
 Confirm the main group row shows `remote_control = 0`.
 
-## Phase 5: Restart NanoClaw
+## Phase 5: Harden container (block `/remote-control` at the binary level)
+
+Create the marker file and rebuild the container image. This prevents the agent
+from running `/remote-control` via Bash even if socially engineered.
+
+```bash
+touch container/disable-remote-control
+./container/build.sh
+```
+
+Confirm the build output includes:
+```
+Security: /remote-control disabled (container/disable-remote-control marker present)
+```
+
+## Phase 6: Restart NanoClaw
 
 ```bash
 # macOS (launchd)

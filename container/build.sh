@@ -13,7 +13,13 @@ CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-docker}"
 echo "Building NanoClaw agent container image..."
 echo "Image: ${IMAGE_NAME}:${TAG}"
 
-${CONTAINER_RUNTIME} build -t "${IMAGE_NAME}:${TAG}" .
+BUILD_ARGS=""
+if [ -f "${SCRIPT_DIR}/disable-remote-control" ]; then
+  echo "Security: /remote-control disabled (container/disable-remote-control marker present)"
+  BUILD_ARGS="--build-arg DISABLE_REMOTE_CONTROL=1"
+fi
+
+${CONTAINER_RUNTIME} build ${BUILD_ARGS} -t "${IMAGE_NAME}:${TAG}" .
 
 echo ""
 echo "Build complete!"
