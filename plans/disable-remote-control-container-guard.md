@@ -20,23 +20,14 @@ is socially engineered, it could invoke `claude /remote-control` directly via th
 
 ## Approach
 
-Two complementary layers applied at container build time, activated by the presence
-of a `container/disable-remote-control` marker file:
+Applied at container build time, activated by the presence of a
+`container/disable-remote-control` marker file:
 
-### Layer 1: Feature flag suppression
-
-`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` is set as a container environment
-variable. This disables the GrowthBook feature flag evaluation that enables remote
-control, hiding the `/remote-control` and `/rc` commands from Claude Code entirely.
-
-### Layer 2: Binary wrapper
+### Binary wrapper
 
 The `claude` binary is replaced with a shell script that intercepts any invocation
 where `/remote-control` or `/remote-control-end` appears as an argument and exits
 with an error. The real binary is preserved as `claude.real`.
-
-This guards against any future scenario where Layer 1 is bypassed (e.g. if
-Anthropic changes how the feature flag works).
 
 ## Implementation
 
@@ -83,10 +74,7 @@ step and creates the marker file + rebuilds if confirmed.
 - The binary wrapper only intercepts calls where `/remote-control` appears as a CLI
   argument. If Claude Code's remote control protocol is invoked through the SDK
   internals without going via the binary, the wrapper won't catch it.
-- `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is not officially documented as a
-  remote control disable. It works by suppressing feature flag fetches — Anthropic
-  could change this behaviour in a future release.
-- Neither layer prevents a sufficiently determined agent from making direct HTTP
+- The wrapper does not prevent a sufficiently determined agent from making direct HTTP
   requests to Anthropic's relay infrastructure using `WebFetch` or `Bash` + curl,
   since the container has unrestricted outbound internet access.
 
